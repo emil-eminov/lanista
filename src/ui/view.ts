@@ -17,6 +17,7 @@ import {
   type Gladiator,
 } from '../game/gladiator'
 import { CLASS_NAMES, portraitSvg } from '../render/portrait'
+import { ICONS, type IconName } from './icons'
 import type { Statuses } from '../game/types'
 
 export const escape = (value: string): string =>
@@ -53,35 +54,70 @@ export function topBar(state: LudusState): string {
 }
 
 export function nav(active: string): string {
-  const tabs: [string, string][] = [
-    ['ludus', 'Ludus'],
-    ['market', 'Market'],
-    ['arena', 'Arena'],
+  const tabs: [string, string, IconName][] = [
+    ['ludus', 'Ludus', 'ludus'],
+    ['market', 'Market', 'market'],
+    ['arena', 'Arena', 'arena'],
   ]
-  return `<nav class="nav">${tabs
-    .map(([id, label]) => `<button data-tab="${id}" class="${active === id ? 'on' : ''}">${label}</button>`)
+  return `<nav class="nav" aria-label="Sections">${tabs
+    .map(
+      ([id, label, icon]) =>
+        `<button data-tab="${id}" class="${active === id ? 'on' : ''}" aria-current="${active === id ? 'page' : 'false'}">${ICONS[icon]}<span>${label}</span></button>`,
+    )
     .join('')}</nav>`
+}
+
+const STAT_MAX = 20
+
+function stat(label: string, value: number, icon: IconName, meaning: string): string {
+  return `<div class="stat">
+    <span class="k">${ICONS[icon]}${label} ${value}</span>
+    <div class="track" role="img" aria-label="${label} ${value} of ${STAT_MAX}, ${meaning}"><i style="width:${(Math.min(value, STAT_MAX) / STAT_MAX) * 100}%"></i></div>
+  </div>`
 }
 
 function statRow(gladiator: Gladiator): string {
   return `<div class="stats">
-    <span title="Damage">MIG ${gladiator.might}</span>
-    <span title="Health">VIG ${gladiator.vigour}</span>
-    <span title="Crowd">CUN ${gladiator.cunning}</span>
+    ${stat('MIG', gladiator.might, 'might', 'damage')}
+    ${stat('VIG', gladiator.vigour, 'vigour', 'health')}
+    ${stat('CUN', gladiator.cunning, 'cunning', 'crowd favour')}
   </div>`
 }
 
-function fighterCard(gladiator: Gladiator, action: DayAction | undefined, selectable: boolean): string {
+function fighterCard(
+  gladiator: Gladiator,
+  action: DayAction | undefined,
+  selectable: boolean,
+  expanded = false,
+): string {
   const trainable = canTrain(gladiator)
   const condition = Math.round(conditionMultiplier(gladiator) * 100)
-  const options: [DayAction, string, boolean][] = [
-    ['might', 'Train might', trainable.ok],
-    ['vigour', 'Train vigour', trainable.ok],
-    ['cunning', 'Train cunning', trainable.ok],
-    ['rest', 'Rest', true],
-    ['feast', 'Feast (12)', true],
-    ['work', 'Hire out', true],
+  const training: DayAction[] = ['might', 'vigour', 'cunning']
+  // Disclosure is tracked separately from the assignment. Deriving it from the
+  // assignment forced Train to pick a stat for the player, and then tapping
+  // that stat toggled it back off.
+  const isTraining = expanded || (action !== undefined && training.includes(action))
+  // Four controls at rest instead of six: the three training options stay
+  // folded behind Train until it is chosen.
+  const primary: [DayAction | 'train', string, IconName, boolean][] = [
+    ['train', 'Train', 'train', trainable.ok],
+    ['rest', 'Rest', 'rest', true],
+    ['feast', 'Feast 12', 'feast', true],
+    ['work', 'Hire out', 'work', true],
   ]
+  const sub: [DayAction, string, IconName][] = [
+    ['might', 'Might', 'might'],
+    ['vigour', 'Vigour', 'vigour'],
+    ['cunning', 'Cunning', 'cunning'],
+  ]
+  const label: Record<string, string> = {
+    might: 'Training might',
+    vigour: 'Training vigour',
+    cunning: 'Training cunning',
+    rest: 'Resting',
+    feast: 'Feasting',
+    work: 'Hired out',
+  }
   return `
     <article class="fighter ${gladiator.dead ? 'dead' : ''}">
       <div class="face">${portraitSvg(gladiator.seed, gladiator.kind, gladiator.hp < maxHpOf(gladiator) * 0.4)}</div>
@@ -104,28 +140,60 @@ function fighterCard(gladiator: Gladiator, action: DayAction | undefined, select
         }
         ${
           selectable
-            ? `<div class="chips">${options
-                .map(
-                  ([id, label, enabled]) =>
-                    `<button class="tag ${action === id ? 'on' : ''}" data-assign="${gladiator.id}:${id}" ${enabled ? '' : 'disabled'}>${label}</button>`,
-                )
-                .join('')}</div>`
+            ? `${
+                action && action !== 'idle'
+                  ? `<div class="assigned">${ICONS[action]}Today: ${label[action] ?? action}</div>`
+                  : ''
+              }
+              <div class="chips">${primary
+                .map(([id, text, icon, enabled]) => {
+                  const on = id === 'train' ? isTraining : action === id
+                  const expanded = id === 'train' ? ` aria-expanded="${isTraining}"` : ''
+                  return `<button class="tag ${on ? 'on' : ''}" data-assign="${gladiator.id}:${id}" aria-pressed="${on}"${expanded} ${enabled ? '' : 'disabled'}>${ICONS[icon]}${text}</button>`
+                })
+                .join('')}</div>
+              ${
+                isTraining
+                  ? `<div class="subchips">${sub
+                      .map(
+                        ([id, text, icon]) =>
+                          `<button class="tag ${action === id ? 'on' : ''}" data-assign="${gladiator.id}:${id}" aria-pressed="${action === id}">${ICONS[icon]}${text}</button>`,
+                      )
+                      .join('')}</div>`
+                  : ''
+              }`
             : ''
         }
       </div>
     </article>`
 }
 
-export function renderLudus(state: LudusState, actions: Record<string, DayAction>, notes: string[]): string {
+export function renderLudus(
+  state: LudusState,
+  actions: Record<string, DayAction>,
+  notes: string[],
+  expanded: ReadonlySet<string> = new Set(),
+): string {
   const living = state.roster.filter((g) => !g.dead)
   return `
     ${topBar(state)}
-    ${nav('ludus')}
     <div class="scroll">
-      ${living.map((g) => fighterCard(g, actions[g.id], true)).join('')}
+      ${living.map((g) => fighterCard(g, actions[g.id], true, expanded.has(g.id))).join('')}
       ${
         notes.length > 0
           ? `<div class="notes">${notes.map((n) => `<div>${escape(n)}</div>`).join('')}</div>`
+          : ''
+      }
+      ${
+        // Guidance rather than blank space. A one-man ludus left most of a tall
+        // phone empty, and a new player has no idea what to do first.
+        living.length < 2
+          ? `<div class="hint">
+              <span class="eyebrow">Running a ludus</span>
+              <div>Training needs a fighter who is rested and fed, so rest and feed him first.</div>
+              <div>Coin runs out faster than you expect. Hire him out on the days he cannot train.</div>
+              <div>One fighter is fragile. Buy a second at the market before the arena takes him.</div>
+            </div>`
           : ''
       }
       ${
@@ -137,14 +205,16 @@ export function renderLudus(state: LudusState, actions: Record<string, DayAction
           : ''
       }
     </div>
-    <div class="actions"><button class="btn" data-nextday>End the day</button></div>`
+    <div class="footer">
+      <button class="btn" data-nextday>End the day</button>
+      ${nav('ludus')}
+    </div>`
 }
 
 export function renderMarket(state: LudusState): string {
   const living = state.roster.filter((g) => !g.dead)
   return `
     ${topBar(state)}
-    ${nav('market')}
     <div class="scroll">
       <div class="eyebrow section">For sale</div>
       ${
@@ -172,14 +242,14 @@ export function renderMarket(state: LudusState): string {
         </div>`,
         )
         .join('')}
-    </div>`
+    </div>
+    <div class="footer">${nav('market')}</div>`
 }
 
 export function renderArena(state: LudusState, chosen: string | undefined): string {
   const living = state.roster.filter((g) => !g.dead)
   return `
     ${topBar(state)}
-    ${nav('arena')}
     <div class="scroll">
       <div class="eyebrow section">Send whom</div>
       <div class="picker">
@@ -203,7 +273,8 @@ export function renderArena(state: LudusState, chosen: string | undefined): stri
           </button>`
         })
         .join('')}
-    </div>`
+    </div>
+    <div class="footer">${nav('arena')}</div>`
 }
 
 function intentText(combat: Combat): string {

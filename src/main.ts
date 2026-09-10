@@ -44,6 +44,8 @@ const ludus: LudusState = loadLudus()
 let screen: Screen = 'ludus'
 let assignments: Record<string, DayAction> = {}
 let notes: string[] = []
+/** Which fighters have their training options open. Not an assignment. */
+const expanded = new Set<string>()
 let chosenFighter: string | undefined
 let fighting: { gladiator: Gladiator; contractId: string; combat: Combat } | undefined
 let outcome: { gladiator: Gladiator; result: BoutOutcome } | undefined
@@ -76,7 +78,7 @@ function render(): void {
   } else if (screen === 'arena') {
     app.innerHTML = renderArena(ludus, chosenFighter)
   } else {
-    app.innerHTML = renderLudus(ludus, assignments, notes)
+    app.innerHTML = renderLudus(ludus, assignments, notes, expanded)
   }
   saveLudus(ludus)
 }
@@ -156,12 +158,32 @@ app.addEventListener('click', (event) => {
   }
   if (data['assign']) {
     const [id, action] = data['assign'].split(':')
-    if (id && action) assignments[id] = action as DayAction
+    if (id && action) {
+      if (action === 'train') {
+        // Train only opens and closes the stat choices. It assigns nothing, so
+        // tapping a stat is always a selection rather than a toggle-off.
+        const current = assignments[id]
+        const wasTraining = current === 'might' || current === 'vigour' || current === 'cunning'
+        if (expanded.has(id) || wasTraining) {
+          expanded.delete(id)
+          if (wasTraining) delete assignments[id]
+        } else {
+          expanded.add(id)
+        }
+      } else if (assignments[id] === action) {
+        delete assignments[id]
+      } else {
+        assignments[id] = action as DayAction
+        // Choosing anything other than a stat closes the training options.
+        if (action !== 'might' && action !== 'vigour' && action !== 'cunning') expanded.delete(id)
+      }
+    }
     return render()
   }
   if (data['nextday'] !== undefined) {
     notes = advanceDay(ludus, assignments)
     assignments = {}
+    expanded.clear()
     return render()
   }
   if (data['buy']) {
@@ -227,6 +249,7 @@ window.__lanista = {
   nextDay: () => {
     notes = advanceDay(ludus, assignments)
     assignments = {}
+    expanded.clear()
     render()
   },
   play: (index: number) => playCard(index),

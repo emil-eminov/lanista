@@ -88,3 +88,24 @@ Current measured balance across 40 bot seasons: 2 won, 20 spared by the crowd,
   announced, Barlow for anything read quickly, loaded from Google Fonts with a
   real fallback stack so a blocked font still leaves a readable page.
 - No dependencies at runtime. About 29KB as a single self-contained file.
+
+## Interface rules this project holds itself to
+
+Checked by tests in `e2e/smoke.spec.ts`, not by eye:
+
+- **Every control is at least 44x44px with 8px between it and its neighbour.**
+  The day actions were 28px tall and 5px apart, which is under every platform
+  minimum and they are the most-used control in the game.
+- **Keyboard focus is visible.** Every button had `border: 0` and no focus
+  style, so a keyboard user had no idea where they were.
+- **No horizontal scroll at 375px**, the narrowest common phone.
+- **`prefers-reduced-motion` is respected**, which the shake and float
+  animations previously ignored.
+- **Body text stays at or above 12.5px**, and muted text was lightened to clear
+  4.5:1 against the panel. Borders got their own token so lightening the text
+  did not lighten every hairline with it.
+- **Icons are inline SVG, never emoji**, drawn in `src/ui/icons.ts` because the
+  game ships as one offline file and cannot fetch an icon set.
+- **Four controls per fighter, not six.** The three training options stay folded
+  behind Train, since six fighters times six buttons is 36 targets on one screen.
+- **Navigation sits at the bottom**, where a thumb can reach it on a tall phone.

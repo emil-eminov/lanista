@@ -8,7 +8,12 @@ export const STYLES = `
 
 :root {
   --sand: #d8c096;
-  --sand-dim: #a48f6c;
+  /* Raised from #a48f6c, which fell under 4.5:1 against the panel at the small
+     sizes it was used at. Borders now have their own token, so lightening the
+     text no longer lightens every hairline with it. */
+  --sand-dim: #c0ab88;
+  --line: #ffffff1a;
+  --focus: #7fd4ff;
   --ground: #17120e;
   --panel: #221a14;
   --panel-lit: #2d231a;
@@ -47,7 +52,25 @@ body {
   gap: 10px;
 }
 
-button { font: inherit; color: inherit; border: 0; background: none; touch-action: manipulation; }
+button {
+  font: inherit; color: inherit; border: 0; background: none;
+  touch-action: manipulation; cursor: pointer;
+  transition: background-color 160ms ease, box-shadow 160ms ease, transform 120ms ease;
+}
+/* Every interactive element had border:0 and no focus style, so keyboard
+   users had no indication of where they were. */
+:where(button, [tabindex]):focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
 
 .eyebrow {
   font-family: var(--display);
@@ -190,10 +213,20 @@ button { font: inherit; color: inherit; border: 0; background: none; touch-actio
 .top div { display: grid; gap: 1px; }
 .top b { font-family: var(--display); font-size: 17px; font-variant-numeric: tabular-nums; }
 
-.nav { display: flex; gap: 6px; }
-.nav button { flex: 1; padding: 10px; border-radius: 10px; background: #ffffff0d;
-  font-family: var(--display); font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--sand-dim); }
+/* Bottom bar: on a tall phone the top of the screen is the hardest place for a
+   thumb to reach, and this is the control used most. */
+.nav { display: flex; gap: 8px; padding-top: 4px; }
+.nav button {
+  flex: 1; min-height: 52px; border-radius: 12px; background: #ffffff0d;
+  display: grid; justify-items: center; align-content: center; gap: 3px;
+  font-family: var(--display); font-size: 11px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--sand-dim);
+}
+.nav .ico { width: 20px; height: 20px; }
+.nav button:hover { background: #ffffff17; color: var(--bone); }
 .nav button.on { background: var(--bronze); color: #211602; }
+
+.footer { display: grid; gap: 8px; padding-top: 6px; }
 
 .scroll { flex: 1; overflow-y: auto; display: grid; gap: 10px; align-content: start;
   padding-bottom: 6px; -webkit-overflow-scrolling: touch; }
@@ -208,37 +241,67 @@ button { font: inherit; color: inherit; border: 0; background: none; touch-actio
 .who { display: grid; gap: 6px; align-content: start; min-width: 0; }
 .who .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .who b { font-family: var(--display); font-size: 16px; }
-.stats { display: flex; gap: 10px; font-size: 12px; font-weight: 700; color: var(--gold);
-  font-variant-numeric: tabular-nums; }
+/* Numbers plus a bar: comparing three fighters at the market from raw numbers
+   alone is slow, and comparison is the entire job of that screen. */
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.stat { display: grid; gap: 3px; }
+.stat .k { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700;
+  color: var(--gold); font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
+.stat .k .ico { width: 13px; height: 13px; }
+.stat .track { height: 5px; border-radius: 4px; background: #0e0b09; overflow: hidden; }
+.stat .track > i { display: block; height: 100%; background: linear-gradient(90deg, #8a6a22, var(--gold)); }
 .gauges { display: grid; gap: 4px; }
-.gauge { display: grid; grid-template-columns: 42px 1fr; gap: 8px; align-items: center;
-  font-size: 11px; color: var(--sand-dim); }
+.gauge { display: grid; grid-template-columns: 46px 1fr; gap: 8px; align-items: center;
+  font-size: 12px; color: var(--sand-dim); }
 .gauge .meter { height: 7px; }
 .meter.tired > i { background: linear-gradient(90deg, #6b5a2e, #d8a13a); }
 .meter.fed > i { background: linear-gradient(90deg, #3f6b4a, #74c98a); }
-.tiny { font-size: 11.5px; color: var(--sand-dim); font-variant-numeric: tabular-nums; }
+.tiny { font-size: 12.5px; color: var(--sand-dim); font-variant-numeric: tabular-nums; }
 .warn { font-size: 12px; color: #ffb0a2; font-weight: 600; }
 
-.chips { display: flex; flex-wrap: wrap; gap: 5px; }
-.tag { padding: 6px 9px; border-radius: 8px; background: #ffffff0f; font-size: 12px; font-weight: 600;
-  color: var(--sand); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+/* 44px minimum with an 8px gap: these were 28px tall and 5px apart, which is
+   under every touch guideline and is the game's main interaction. */
+.tag {
+  min-height: 44px; padding: 8px 12px; border-radius: 10px; background: #ffffff10;
+  font-size: 13px; font-weight: 600; color: var(--bone);
+  display: inline-flex; align-items: center; gap: 7px;
+}
+.tag .ico { width: 17px; height: 17px; opacity: 0.85; }
+.tag:hover { background: #ffffff1c; }
 .tag.on { background: var(--gold); color: #241a09; }
-.tag[disabled] { opacity: 0.35; }
+.tag.on .ico { opacity: 1; }
+.tag[disabled] { opacity: 0.4; cursor: not-allowed; }
+.tag[aria-expanded='true'] { background: var(--bronze); color: #211602; }
+
+/* The three training options only appear once Train is chosen, so a fighter
+   shows four controls at rest instead of six. */
+.subchips { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px 0 0 2px;
+  border-left: 2px solid var(--bronze); margin-left: 4px; padding-left: 10px; }
+
+.assigned { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px;
+  font-weight: 600; color: var(--gold); }
+.assigned .ico { width: 15px; height: 15px; }
 
 .offer { display: grid; gap: 8px; }
 .sellrow { display: flex; align-items: center; justify-content: space-between; gap: 10px;
   background: var(--panel); border-radius: 12px; padding: 10px 12px; }
-.sellrow .btn { flex: 0 0 auto; padding: 9px 14px; font-size: 12px; }
+.sellrow .btn { flex: 0 0 auto; min-height: 44px; padding: 10px 16px; font-size: 12px; }
 
 .picker { display: flex; gap: 8px; flex-wrap: wrap; }
-.pickface { width: 78px; display: grid; gap: 4px; justify-items: center; padding: 6px; border-radius: 12px;
-  background: #ffffff08; font-size: 11px; color: var(--sand); }
+.pickface { width: 82px; min-height: 96px; display: grid; gap: 4px; justify-items: center; padding: 8px;
+  border-radius: 12px; background: #ffffff08; font-size: 11.5px; color: var(--sand); }
+.pickface:hover { background: #ffffff14; }
 .pickface svg { width: 62px; height: 62px; }
 .pickface.on { background: var(--bronze); color: #211602; }
 
 .notes { display: grid; gap: 3px; background: #ffffff08; border-radius: 12px; padding: 10px 12px;
   font-size: 13px; color: var(--sand); }
 .notes.graves { color: var(--sand-dim); }
+.hint { display: grid; gap: 7px; padding: 14px 16px; border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff0d, #ffffff05);
+  box-shadow: inset 0 0 0 1px var(--line); font-size: 13.5px; line-height: 1.45; color: var(--sand); }
+.hint .eyebrow { padding-bottom: 2px; }
 
 .bigface { width: 128px; height: 128px; }
 /* display:block matters: a span is inline, and width and height do not
