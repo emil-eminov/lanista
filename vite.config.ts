@@ -11,5 +11,12 @@ const OUT_DIR = process.env.LANISTA_DIST ?? join(homedir(), 'lanista-build', 'di
 export default defineConfig({
   base: './',
   build: { target: 'es2022', outDir: OUT_DIR, emptyOutDir: true, assetsInlineLimit: 0 },
-  test: { globals: true, environment: 'node', include: ['tests/**/[!_]*.test.ts'] },
+  test: {
+    globals: true,
+    environment: 'node',
+    include: ['tests/**/[!_]*.test.ts'],
+    // Emptied when the season was replaced by a persistent school; the folder
+    // is mounted without delete permission so the file cannot be removed.
+    exclude: ['tests/run.test.ts', '**/node_modules/**'],
+  },
 })

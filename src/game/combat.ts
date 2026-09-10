@@ -54,8 +54,13 @@ export class Combat {
     readonly enemyDef: EnemyDef,
     fightIndex = 0,
     seed = 1,
+    /** Added to every attack, from the fighter's might and condition. */
+    private readonly bonusDamage = 0,
+    /** Favour a well-known showman starts with, from cunning. */
+    startingFavor = FAVOR_START,
   ) {
     this.rng = createRng(seed)
+    this.favor = Math.max(0, Math.min(FAVOR_MAX, startingFavor))
     const scaled = scaleEnemy(enemyDef, fightIndex)
     this.enemyDef = scaled
     this.player = { name: playerName, hp: playerHp, maxHp: playerMaxHp, block: 0, statuses: noStatuses() }
@@ -106,7 +111,8 @@ export class Combat {
 
   /** Outgoing damage after edge and stagger. */
   private outgoing(attacker: Combatant, base: number): number {
-    const withEdge = base + attacker.statuses.edge
+    const bonus = attacker === this.player ? this.bonusDamage : 0
+    const withEdge = base + attacker.statuses.edge + bonus
     return attacker.statuses.stagger > 0 ? Math.ceil(withEdge / 2) : withEdge
   }
 

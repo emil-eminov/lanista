@@ -1,20 +1,33 @@
 import { STYLES } from './ui/styles'
-import { renderBriefing, renderFight, renderOver, renderReward } from './ui/view'
-import { Run } from './game/run'
+import { renderAftermath, renderArena, renderFight, renderLudus, renderMarket } from './ui/view'
+import { advanceDay, buy, loadLudus, saveLudus, sell, type DayAction, type LudusState } from './game/ludus'
+import { settleBout, startBout, type BoutOutcome } from './game/bout'
 import { card } from './game/cards'
-import { enemyById, scaleEnemy } from './game/enemies'
-import { loadLudus, recordRun, type LudusState } from './game/ludus'
+import type { Combat } from './game/combat'
+import type { Gladiator } from './game/gladiator'
 import { initAudio, isMuted, sfx, toggleMuted } from './audio/sfx'
+
+type Screen = 'ludus' | 'market' | 'arena' | 'fight' | 'aftermath'
 
 declare global {
   interface Window {
     __lanista?: {
-      phase(): string
-      state(): { hp: number; favor: number; enemyHp: number; hand: string[]; fightIndex: number; played: number }
+      screen(): Screen
+      state(): {
+        day: number
+        coin: number
+        fame: number
+        roster: number
+        favor: number
+        played: number
+        hand: string[]
+      }
+      go(screen: Screen): void
+      assign(id: string, action: DayAction): void
+      nextDay(): void
       play(index: number): void
       endTurn(): void
-      /** Plays the whole run with the scripted gladiator. Used by the tests. */
-      auto(maxFights?: number): void
+      autoFight(): void
     }
   }
 }
@@ -27,14 +40,16 @@ const app = document.createElement('div')
 app.id = 'app'
 document.body.append(app)
 
-let ludus: LudusState = loadLudus()
-let run = new Run()
-let recorded = false
+const ludus: LudusState = loadLudus()
+let screen: Screen = 'ludus'
+let assignments: Record<string, DayAction> = {}
+let notes: string[] = []
+let chosenFighter: string | undefined
+let fighting: { gladiator: Gladiator; contractId: string; combat: Combat } | undefined
+let outcome: { gladiator: Gladiator; result: BoutOutcome } | undefined
 
-const wake = (): void => initAudio()
-document.addEventListener('pointerdown', wake, { once: true })
+document.addEventListener('pointerdown', () => initAudio(), { once: true })
 
-/** Floating damage numbers, appended outside the rendered markup so a redraw does not kill them. */
 function pop(text: string, mine: boolean): void {
   const arena = app.querySelector('[data-arena]')
   if (!arena) return
@@ -47,42 +62,34 @@ function pop(text: string, mine: boolean): void {
 
 function shake(): void {
   app.classList.remove('shake')
-  // Reading offsetWidth forces a reflow, without which re-adding the class in
-  // the same frame does not restart the animation.
   void app.offsetWidth
   app.classList.add('shake')
 }
 
 function render(): void {
-  if (run.phase === 'BRIEFING') {
-    const def = scaleEnemy(enemyById(run.opponentId), run.fightIndex)
-    app.innerHTML = renderBriefing(run, ludus, def.name, def.hp)
-  } else if (run.phase === 'FIGHT' && run.combat) {
-    app.innerHTML = renderFight(run, run.combat)
-  } else if (run.phase === 'REWARD') {
-    app.innerHTML = renderReward(run)
-  } else if (run.phase === 'OVER') {
-    if (!recorded) {
-      ludus = recordRun(ludus, { name: run.name, result: run.result! })
-      recorded = true
-      if (run.result!.fightsWon >= 8) sfx.win()
-      else if (run.result!.survived) sfx.mercy()
-      else sfx.death()
-    }
-    app.innerHTML = renderOver(run, ludus)
+  if (screen === 'fight' && fighting) {
+    app.innerHTML = renderFight(fighting.gladiator, fighting.combat)
+  } else if (screen === 'aftermath' && outcome) {
+    app.innerHTML = renderAftermath(outcome.gladiator, outcome.result)
+  } else if (screen === 'market') {
+    app.innerHTML = renderMarket(ludus)
+  } else if (screen === 'arena') {
+    app.innerHTML = renderArena(ludus, chosenFighter)
+  } else {
+    app.innerHTML = renderLudus(ludus, assignments, notes)
   }
+  saveLudus(ludus)
 }
 
 function playCard(index: number): void {
-  const combat = run.combat
-  if (!combat) return
+  if (!fighting) return
+  const { combat } = fighting
   const id = combat.hand[index]
   if (!id) return
   const def = card(id)
   const enemyBefore = combat.enemy.hp
   const meBefore = combat.player.hp
   const favorBefore = combat.favor
-
   if (!combat.play(id)) return
 
   const dealt = enemyBefore - combat.enemy.hp
@@ -91,21 +98,17 @@ function playCard(index: number): void {
     pop(`-${dealt}`, false)
     sfx.hit()
     shake()
-  } else if (def.block) {
-    sfx.guard()
-  } else {
-    sfx.skill()
-  }
+  } else if (def.block) sfx.guard()
+  else sfx.skill()
   if (taken > 0) pop(`-${taken}`, true)
-  const gained = combat.favor - favorBefore
-  if (gained > 0) sfx.roar(Math.min(1, gained / 10))
+  if (combat.favor > favorBefore) sfx.roar(Math.min(1, (combat.favor - favorBefore) / 10))
 
-  afterCombatChange()
+  finishIfOver()
 }
 
 function endTurn(): void {
-  const combat = run.combat
-  if (!combat) return
+  if (!fighting) return
+  const { combat } = fighting
   const before = combat.player.hp
   const favorBefore = combat.favor
   combat.endTurn()
@@ -114,40 +117,87 @@ function endTurn(): void {
     pop(`-${taken}`, true)
     sfx.hit()
     shake()
-  } else if (combat.outcome === 'fighting') {
-    sfx.blocked()
-  }
+  } else if (combat.outcome === 'fighting') sfx.blocked()
   if (combat.favor < favorBefore) sfx.restless()
-  afterCombatChange()
+  finishIfOver()
 }
 
-function afterCombatChange(): void {
-  const combat = run.combat
-  if (combat && combat.outcome !== 'fighting') run.settle()
+function finishIfOver(): void {
+  if (!fighting) return render()
+  const { combat, gladiator, contractId } = fighting
+  if (combat.outcome === 'fighting') return render()
+
+  const contract = ludus.contracts.find((c) => c.id === contractId)
+  if (!contract) return render()
+  const result = settleBout(ludus, gladiator, contract, combat)
+  // A bout costs a day like anything else, so the arena competes with training.
+  notes = advanceDay(ludus, {})
+  ludus.contracts = ludus.contracts.filter((c) => c.id !== contractId)
+  outcome = { gladiator, result }
+  fighting = undefined
+  screen = 'aftermath'
+  if (result.won) sfx.win()
+  else if (result.survived) sfx.mercy()
+  else sfx.death()
   render()
 }
 
 app.addEventListener('click', (event) => {
-  const target = (event.target as HTMLElement).closest('[data-card],[data-endturn],[data-begin],[data-reward],[data-newrun],[data-sound]')
+  const target = (event.target as HTMLElement).closest(
+    '[data-tab],[data-assign],[data-nextday],[data-buy],[data-sell],[data-choose],[data-fight],[data-card],[data-endturn],[data-sound],[data-back]',
+  )
   if (!(target instanceof HTMLElement)) return
   initAudio()
+  const data = target.dataset
 
-  if (target.dataset['card'] !== undefined) return playCard(Number(target.dataset['card']))
-  if (target.dataset['endturn'] !== undefined) return endTurn()
-  if (target.dataset['begin'] !== undefined) {
-    run.beginFight()
+  if (data['tab']) {
+    screen = data['tab'] as Screen
     return render()
   }
-  if (target.dataset['reward'] !== undefined) {
-    run.takeReward(Number(target.dataset['reward']))
+  if (data['assign']) {
+    const [id, action] = data['assign'].split(':')
+    if (id && action) assignments[id] = action as DayAction
     return render()
   }
-  if (target.dataset['newrun'] !== undefined) {
-    run = new Run()
-    recorded = false
+  if (data['nextday'] !== undefined) {
+    notes = advanceDay(ludus, assignments)
+    assignments = {}
     return render()
   }
-  if (target.dataset['sound'] !== undefined) {
+  if (data['buy']) {
+    const result = buy(ludus, data['buy'])
+    if (!result.ok) notes = [result.reason ?? 'no']
+    return render()
+  }
+  if (data['sell']) {
+    sell(ludus, data['sell'])
+    return render()
+  }
+  if (data['choose']) {
+    chosenFighter = chosenFighter === data['choose'] ? undefined : data['choose']
+    return render()
+  }
+  if (data['fight']) {
+    const contract = ludus.contracts.find((c) => c.id === data['fight'])
+    const gladiator = ludus.roster.find((g) => g.id === chosenFighter && !g.dead)
+    if (!contract || !gladiator) return
+    fighting = {
+      gladiator,
+      contractId: contract.id,
+      combat: startBout(gladiator, contract, ludus.day * 31 + contract.tier),
+    }
+    screen = 'fight'
+    return render()
+  }
+  if (data['card'] !== undefined) return playCard(Number(data['card']))
+  if (data['endturn'] !== undefined) return endTurn()
+  if (data['back'] !== undefined) {
+    outcome = undefined
+    chosenFighter = undefined
+    screen = 'ludus'
+    return render()
+  }
+  if (data['sound'] !== undefined) {
     toggleMuted()
     target.style.opacity = isMuted() ? '0.4' : '1'
   }
@@ -156,31 +206,33 @@ app.addEventListener('click', (event) => {
 render()
 
 window.__lanista = {
-  phase: () => run.phase,
+  screen: () => screen,
   state: () => ({
-    hp: run.combat?.player.hp ?? run.hp,
-    favor: run.combat?.favor ?? 0,
-    enemyHp: run.combat?.enemy.hp ?? 0,
-    hand: run.combat?.hand ?? [],
-    fightIndex: run.fightIndex,
-    // Cards that have left the hand this fight. Hand size is not a reliable
-    // signal that a card was played: several cards draw a replacement.
-    played: (run.combat?.discard.length ?? 0) + (run.combat?.exhausted.length ?? 0),
+    day: ludus.day,
+    coin: ludus.coin,
+    fame: ludus.fame,
+    roster: ludus.roster.filter((g) => !g.dead).length,
+    favor: fighting?.combat.favor ?? 0,
+    played: (fighting?.combat.discard.length ?? 0) + (fighting?.combat.exhausted.length ?? 0),
+    hand: fighting?.combat.hand ?? [],
   }),
+  go: (next: Screen) => {
+    screen = next
+    render()
+  },
+  assign: (id: string, action: DayAction) => {
+    assignments[id] = action
+    render()
+  },
+  nextDay: () => {
+    notes = advanceDay(ludus, assignments)
+    assignments = {}
+    render()
+  },
   play: (index: number) => playCard(index),
   endTurn: () => endTurn(),
-  auto: async (maxFights = 12) => {
-    const { botTakeTurn, botChooseReward } = await import('./game/bot')
+  autoFight: () => {
     let guard = 0
-    while (run.phase !== 'OVER' && guard++ < maxFights * 40) {
-      if (run.phase === 'BRIEFING') run.beginFight()
-      else if (run.phase === 'FIGHT' && run.combat) {
-        botTakeTurn(run.combat)
-        if (run.combat.outcome !== 'fighting') run.settle()
-      } else if (run.phase === 'REWARD') {
-        run.takeReward(botChooseReward(run.rewards, run.hp, run.maxHp))
-      }
-    }
-    render()
+    while (fighting && fighting.combat.outcome === 'fighting' && guard++ < 200) endTurn()
   },
 }

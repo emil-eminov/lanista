@@ -99,7 +99,7 @@ button { font: inherit; color: inherit; border: 0; background: none; touch-actio
  * like a form with a gap in it. Sand, a long shadow and a scrim under the log
  * turn the same pixels into a place.
  */
-.arena {
+.arena-floor {
   flex: 1; position: relative; display: grid; align-content: end; gap: 4px;
   padding: 12px 12px 10px; min-height: 120px; border-radius: 14px; overflow: hidden;
   background:
@@ -108,12 +108,12 @@ button { font: inherit; color: inherit; border: 0; background: none; touch-actio
   box-shadow: inset 0 14px 30px #00000080, inset 0 0 0 1px #ffffff12;
 }
 /* Sand grain, drawn with a repeating gradient rather than an image. */
-.arena::before {
+.arena-floor::before {
   content: ''; position: absolute; inset: 0; opacity: 0.07; pointer-events: none;
   background-image: repeating-linear-gradient(97deg, #000 0 1px, transparent 1px 3px),
     repeating-linear-gradient(13deg, #fff 0 1px, transparent 1px 4px);
 }
-.arena .line { position: relative; text-shadow: 0 1px 4px #000e, 0 0 12px #0008; }
+.arena-floor .line { position: relative; text-shadow: 0 1px 4px #000e, 0 0 12px #0008; }
 .line { font-size: 13px; color: #f3e7cd; }
 .line.player { color: #fff3dc; font-weight: 600; }
 .pop {
@@ -182,4 +182,67 @@ button { font: inherit; color: inherit; border: 0; background: none; touch-actio
 .pick:active { background: var(--panel-lit); }
 .tomb { display: grid; gap: 4px; font-size: 13px; color: var(--sand-dim); }
 .ledger { display: flex; gap: 18px; font-variant-numeric: tabular-nums; color: var(--sand); font-weight: 600; }
+
+/* ---- The school ---------------------------------------------------- */
+
+.top { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 8px 12px;
+  background: var(--panel); border-radius: 12px; }
+.top div { display: grid; gap: 1px; }
+.top b { font-family: var(--display); font-size: 17px; font-variant-numeric: tabular-nums; }
+
+.nav { display: flex; gap: 6px; }
+.nav button { flex: 1; padding: 10px; border-radius: 10px; background: #ffffff0d;
+  font-family: var(--display); font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--sand-dim); }
+.nav button.on { background: var(--bronze); color: #211602; }
+
+.scroll { flex: 1; overflow-y: auto; display: grid; gap: 10px; align-content: start;
+  padding-bottom: 6px; -webkit-overflow-scrolling: touch; }
+.section { padding-top: 6px; }
+.empty { color: var(--sand-dim); font-size: 14px; margin: 0; }
+
+.fighter { display: grid; grid-template-columns: 72px 1fr; gap: 11px; background: var(--panel);
+  border-radius: 14px; padding: 11px; box-shadow: inset 0 0 0 1px #ffffff0d; }
+.fighter.dead { opacity: 0.45; }
+.face { width: 72px; height: 72px; }
+.portrait-svg { width: 100%; height: 100%; display: block; }
+.who { display: grid; gap: 6px; align-content: start; min-width: 0; }
+.who .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.who b { font-family: var(--display); font-size: 16px; }
+.stats { display: flex; gap: 10px; font-size: 12px; font-weight: 700; color: var(--gold);
+  font-variant-numeric: tabular-nums; }
+.gauges { display: grid; gap: 4px; }
+.gauge { display: grid; grid-template-columns: 42px 1fr; gap: 8px; align-items: center;
+  font-size: 11px; color: var(--sand-dim); }
+.gauge .meter { height: 7px; }
+.meter.tired > i { background: linear-gradient(90deg, #6b5a2e, #d8a13a); }
+.meter.fed > i { background: linear-gradient(90deg, #3f6b4a, #74c98a); }
+.tiny { font-size: 11.5px; color: var(--sand-dim); font-variant-numeric: tabular-nums; }
+.warn { font-size: 12px; color: #ffb0a2; font-weight: 600; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.tag { padding: 6px 9px; border-radius: 8px; background: #ffffff0f; font-size: 12px; font-weight: 600;
+  color: var(--sand); }
+.tag.on { background: var(--gold); color: #241a09; }
+.tag[disabled] { opacity: 0.35; }
+
+.offer { display: grid; gap: 8px; }
+.sellrow { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--panel); border-radius: 12px; padding: 10px 12px; }
+.sellrow .btn { flex: 0 0 auto; padding: 9px 14px; font-size: 12px; }
+
+.picker { display: flex; gap: 8px; flex-wrap: wrap; }
+.pickface { width: 78px; display: grid; gap: 4px; justify-items: center; padding: 6px; border-radius: 12px;
+  background: #ffffff08; font-size: 11px; color: var(--sand); }
+.pickface svg { width: 62px; height: 62px; }
+.pickface.on { background: var(--bronze); color: #211602; }
+
+.notes { display: grid; gap: 3px; background: #ffffff08; border-radius: 12px; padding: 10px 12px;
+  font-size: 13px; color: var(--sand); }
+.notes.graves { color: var(--sand-dim); }
+
+.bigface { width: 128px; height: 128px; }
+/* display:block matters: a span is inline, and width and height do not
+   apply to inline boxes, so the fighter's portrait rendered at zero size. */
+.mini { display: block; width: 34px; height: 34px; flex: 0 0 auto; }
+.mini svg { width: 100%; height: 100%; }
 `
