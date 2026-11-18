@@ -1,5 +1,14 @@
 # Lanista
 
+**[Play it in your browser](https://emil-eminov.github.io/lanista/)** (built for phones, works on desktop)
+
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)
+![tests](https://img.shields.io/badge/unit_tests-36_passing-2ea44f)
+![size](https://img.shields.io/badge/bundle-47_KB-informational)
+
+<img src="docs/img/screenshot.png" width="300" align="right" alt="Lanista ludus screen">
+
 A gladiator school you run day by day. You are the lanista, and you are
 permanent. Your fighters are not.
 
@@ -64,13 +73,12 @@ of the dead all survive, stored locally.
 npm install
 npm run dev          # play at the printed localhost URL
 npm run verify       # typecheck + lint + unit tests, including balance guards
-npm run test:e2e     # browser tests; needs LANISTA_CHROMIUM set to a Chromium binary
-node scripts/build-single.mjs out.html    # one file, about 29KB
+npm run test:e2e     # Playwright browser tests; set LANISTA_CHROMIUM to a Chromium binary
+npm run build        # static build in dist/
+node scripts/build-single.mjs out.html    # one self-contained file
 ```
 
-Build output goes to `~/lanista-build/dist`, outside this folder, because the
-folder is mounted without delete permission and Vite cannot clear an out-dir
-inside it.
+Every push runs `verify` and deploys the build to GitHub Pages (`.github/workflows/pages.yml`).
 
 ## The bot
 
@@ -87,7 +95,7 @@ Current measured balance across 40 bot seasons: 2 won, 20 spared by the crowd,
 - Cards are typography, since there is no artist. Cinzel for anything carved or
   announced, Barlow for anything read quickly, loaded from Google Fonts with a
   real fallback stack so a blocked font still leaves a readable page.
-- No dependencies at runtime. About 29KB as a single self-contained file.
+- No dependencies at runtime. About 46KB as a single self-contained file.
 
 ## Interface rules this project holds itself to
 
@@ -109,3 +117,9 @@ Checked by tests in `e2e/smoke.spec.ts`, not by eye:
 - **Four controls per fighter, not six.** The three training options stay folded
   behind Train, since six fighters times six buttons is 36 targets on one screen.
 - **Navigation sits at the bottom**, where a thumb can reach it on a tall phone.
+
+## How this was built
+
+Game design, balance direction and playtesting by me (Emil Eminov). The implementation was written with an AI pair-programmer (Claude) working to my spec, with every rule above enforced by tests.
+
+Lanista is the third concept in a deliberate build-test-kill loop: the first ([Chain Wreck](https://github.com/emil-eminov/chain-wreck)) and second ([Rot](https://github.com/emil-eminov/rot)) were built to a playable gate, playtested on a real phone, and dropped or replaced on the result.
